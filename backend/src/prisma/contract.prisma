@@ -1,0 +1,307 @@
+// use prisma-8
+
+// ------------------------------------------------------
+// NIG NETWORK ENUMS
+// ------------------------------------------------------
+
+enum Role {
+  @@type("pg/text@1")
+  L_NIG  = "L_NIG"   // Leader of NIG (Global Admin)
+  L_SNIG = "L_SNIG"  // Leader of Sub-NIG (Sector Leader)
+  L_T    = "L_T"     // Leader of Tower (Building/Tower Leader)
+  I_T    = "I_T"     // Integrator of Tower (Neighbor / Family)
+}
+
+enum UserStatus {
+  @@type("pg/text@1")
+  PENDING         = "PENDING"
+  ACTIVE          = "ACTIVE"
+  REPORTED       = "REPORTED"    // Pre-sanction status / Reported
+  TEMPORARY_BAN   = "TEMPORARY_BAN"
+  BANNED          = "BANNED"
+}
+
+enum StructureType {
+  @@type("pg/text@1")
+  GLOBAL = "GLOBAL"
+  S_NIG  = "S_NIG"
+  TOWER  = "TOWER"
+}
+
+enum BoardType {
+  @@type("pg/text@1")
+  ANNOUNCEMENT = "ANNOUNCEMENT" // Official announcements board
+  DISCUSSION   = "DISCUSSION"   // Community discussion forum
+}
+
+enum TaskStatus {
+  @@type("pg/text@1")
+  PENDING     = "PENDING"
+  IN_PROGRESS = "IN_PROGRESS"
+  COMPLETED   = "COMPLETED"
+}
+
+// ------------------------------------------------------
+// NETWORK STRUCTURES
+// ------------------------------------------------------
+
+model SubNig {
+  id        Uuid               @id @default(uuid())
+  name      String
+  createdAt TimestamptzString  @default(now())
+  updatedAt temporal.updatedAt()
+
+  towers    Tower[]
+  boards    Board[]
+  zas       ZoneOfAction[]
+
+  @@map("sub_nig")
+}
+model Apartment {
+  id         Uuid               @id @default(uuid())
+  towerId    Uuid
+  name       String
+  lastUpdate TimestamptzString? // null = nunca editado; controla el cooldown de 15 días
+  createdAt  TimestamptzString  @default(now())
+  updatedAt  temporal.updatedAt()
+
+  tower      Tower              @relation(fields: [towerId], references: [id], onDelete: Cascade)
+  users      User[]
+
+  @@unique([towerId, name])
+  @@map("apartment")
+}
+
+model Tower {
+  id        Uuid               @id @default(uuid())
+  name      String
+  subNigId  Uuid
+  createdAt TimestamptzString  @default(now())
+  updatedAt temporal.updatedAt()
+
+  subNig    SubNig   @relation(fields: [subNigId], references: [id], onDelete: Cascade)
+  apartments Apartment[]
+  boards    Board[]
+
+  @@index([subNigId])
+  @@map("tower")
+}
+
+// ------------------------------------------------------
+// USERS AND PROFILES
+// ------------------------------------------------------
+
+model User {
+  id                 Uuid               @id @default(uuid())
+  fullName           String
+  nickname           String?
+  password           String
+  lastFullNameUpdate TimestamptzString? @default(now())
+
+  phoneNumber        String             @unique
+  email              String?            @unique
+  privateProfile     Boolean            @default(false)
+
+  role               Role               @default(I_T)
+  status             UserStatus         @default(PENDING)
+
+  apartmentGuide String
+  apartmentId Uuid?
+
+  createdAt          TimestamptzString  @default(now())
+  updatedAt          temporal.updatedAt()
+
+ apartment   Apartment? @relation(fields: [apartmentId], references: [id])
+  posts              Post[]
+  votes              TaskVote[]
+  cooldowns          BoardCooldown[]
+  leaderships        LeadershipAssignment[]
+
+  reportsGiven       Report[]               @relation("UserReportsGiven")
+  reportsReceived    Report[]               @relation("UserReportsReceived")
+
+  @@index([apartmentId])
+  @@map("user")
+}
+
+// ------------------------------------------------------
+// REPORT AND COMPLAINT SYSTEM
+// ------------------------------------------------------
+
+model Report {
+  id             Uuid               @id @default(uuid())
+  reporterId     Uuid
+  reportedUserId Uuid
+  reason         String
+  createdAt      TimestamptzString  @default(now())
+
+  reporter       User               @relation("UserReportsGiven", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser   User               @relation("UserReportsReceived", fields: [reportedUserId], references: [id], onDelete: Cascade)
+
+  @@index([reporterId, reportedUserId])
+  @@index([reportedUserId])
+  @@map("report")
+}
+
+// ------------------------------------------------------
+// EXPLICIT LEADERSHIP
+// ------------------------------------------------------
+
+model LeadershipAssignment {
+  id          Uuid               @id @default(uuid())
+  userId      Uuid
+  type        StructureType
+  structureId Uuid?
+
+  createdAt   TimestamptzString  @default(now())
+  updatedAt   temporal.updatedAt()
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, structureId])
+  @@index([userId])
+  @@map("leadership_assignment")
+}
+
+// ------------------------------------------------------
+// COMMUNITY MAP LAYOUT (MATRIX / GRID PLAN)
+// ------------------------------------------------------
+
+model CommunityLayout {
+  id            Uuid              @id @default(uuid())
+  structureType StructureType
+  structureId   Uuid              @map("structure_id")
+  layoutJson    Json              @map("layout_json")
+
+  createdAt     TimestamptzString @default(now())
+  updatedAt     temporal.updatedAt()
+
+  @@unique([structureType, structureId])
+  @@index([structureId])
+  @@map("community_layout")
+}
+
+// ------------------------------------------------------
+// BOARDS, POSTS, AND PERMISSIONS
+// ------------------------------------------------------
+
+model Board {
+  id                 Uuid               @id @default(uuid())
+  title              String
+  type               BoardType          @default(DISCUSSION)
+  ownerStructureType StructureType      @default(GLOBAL)
+
+  subNigId           Uuid?
+  towerId            Uuid?
+
+  minReadRole        Role               @default(I_T)
+  minWriteRole       Role               @default(I_T)
+  exactWriteRole     Role?
+
+  cooldownSeconds    Int                @default(60)
+
+  createdAt          TimestamptzString  @default(now())
+  updatedAt          temporal.updatedAt()
+
+  subNig             SubNig?            @relation(fields: [subNigId], references: [id], onDelete: Cascade)
+  tower              Tower?             @relation(fields: [towerId], references: [id], onDelete: Cascade)
+  posts              Post[]
+  cooldowns          BoardCooldown[]
+
+  @@index([subNigId])
+  @@index([towerId])
+  @@map("board")
+}
+
+model Post {
+  id        Uuid               @id @default(uuid())
+  boardId   Uuid
+  authorId  Uuid
+  content   String
+
+  editUntil TimestamptzString
+
+  createdAt TimestamptzString  @default(now())
+  updatedAt temporal.updatedAt()
+
+  board     Board              @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  author    User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([boardId])
+  @@index([authorId])
+  @@map("post")
+}
+
+// ------------------------------------------------------
+// INDEPENDENT COOLDOWN SYSTEM PER BOARD AND USER
+// ------------------------------------------------------
+
+model BoardCooldown {
+  id            Uuid              @id @default(uuid())
+  boardId       Uuid
+  userId        Uuid
+  cooldownUntil TimestamptzString
+  createdAt     TimestamptzString @default(now())
+
+  board         Board             @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([boardId, userId])
+  @@index([boardId])
+  @@index([userId])
+  @@map("board_cooldown")
+}
+
+// ------------------------------------------------------
+// ZONES OF ACTION (ZAs), TASKS, AND CONSENSUS ENGINE
+// ------------------------------------------------------
+
+model ZoneOfAction {
+  id          Uuid               @id @default(uuid())
+  subNigId    Uuid
+  title       String
+  description String
+  priority    Int                @default(1)
+  status      TaskStatus         @default(PENDING)
+  createdAt   TimestamptzString  @default(now())
+  updatedAt   temporal.updatedAt()
+
+  subNig      SubNig             @relation(fields: [subNigId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+
+  @@index([subNigId])
+  @@map("zone_of_action")
+}
+
+model Task {
+  id           Uuid               @id @default(uuid())
+  zaId         Uuid
+  title        String
+  description  String?
+  status       TaskStatus         @default(PENDING)
+  createdAt    TimestamptzString  @default(now())
+  updatedAt    temporal.updatedAt()
+
+  zoneOfAction ZoneOfAction       @relation(fields: [zaId], references: [id], onDelete: Cascade)
+  votes        TaskVote[]
+
+  @@index([zaId])
+  @@map("task")
+}
+
+model TaskVote {
+  id        Uuid               @id @default(uuid())
+  taskId    Uuid
+  userId    Uuid
+  approved  Boolean
+  comment   String?
+  createdAt TimestamptzString  @default(now())
+
+  task      Task               @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  voter     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([taskId])
+  @@index([userId])
+  @@map("task_vote")
+}
