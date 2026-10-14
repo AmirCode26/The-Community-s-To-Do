@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Template from '../components/Template';
-import { api_tctd } from '../services/api';
+import { api_tctd, getUserSession } from '../services/api';
 
 interface UserProfile {
   id: string;
@@ -28,16 +28,25 @@ const formatRole = (role: string) => {
 export default function UserDetail() {
   const { userId } = useParams();
   const navigate = useNavigate();
+  const currentUser = getUserSession();
 
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
+
+  // Estados para el popup modal de cambio de rol
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [newRole, setNewRole] = useState('RESIDENT');
+
+  const isOwner = currentUser && currentUser.role === 'L_NIG';
 
   useEffect(() => {
     const fetchUserDetail = async () => {
       try {
         const data = await api_tctd(`/users/${userId}`, 'GET');
         setUser(data);
+        if (data?.role) setNewRole(data.role);
       } catch (error: unknown) {
         if (error instanceof Error) {
           setErrorMsg(error.message);
@@ -54,11 +63,28 @@ export default function UserDetail() {
     }
   }, [userId]);
 
+  const handleRoleUpdate = async () => {
+    try {
+      await api_tctd(`/users/${userId}/role`, 'PATCH', { role: newRole });
+      setUser(prev => prev ? { ...prev, role: newRole } : null);
+      setShowRoleModal(false);
+      setSuccessMsg('User role updated successfully.');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setErrorMsg(error.message);
+      } else {
+        setErrorMsg('Could not update user role.');
+      }
+      setShowRoleModal(false);
+    }
+  };
+
   const roleInfo = user ? formatRole(user.role) : null;
 
   return (
     <Template>
-      <div className="h-full w-full flex flex-col space-y-3 max-w-sm mx-auto">
+      <div className="h-full w-full flex flex-col space-y-3 max-w-sm mx-auto relative">
 
         {/* Encabezado fijo con botón de retorno */}
         <div className="shrink-0 flex items-center justify-between border-b border-[#569ad5d4]/30 pb-2">
@@ -81,6 +107,12 @@ export default function UserDetail() {
         {errorMsg && (
           <p className="text-xs italic font-bold text-red-500 text-center shrink-0">
             {errorMsg}
+          </p>
+        )}
+
+        {successMsg && (
+          <p className="text-xs italic font-bold text-emerald-600 dark:text-emerald-400 text-center shrink-0 bg-emerald-50 dark:bg-emerald-950/40 p-1 border border-emerald-400">
+            {successMsg}
           </p>
         )}
 
@@ -110,10 +142,24 @@ export default function UserDetail() {
                 <span className="text-[9px] font-bold uppercase italic text-slate-500 dark:text-slate-300">
                   Community Role
                 </span>
-                <div>
+                <div className="flex items-center justify-between">
                   <span className={`inline-block text-[10px] font-bold uppercase italic px-2 py-0.5 border ${roleInfo?.color}`}>
                     {roleInfo?.label}
                   </span>
+
+                  {/* Botón condicional de cambio de rol visible solo para L_NIG */}
+                  {isOwner && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewRole(user.role);
+                        setShowRoleModal(true);
+                      }}
+                      className="px-2 py-1 text-[9px] font-black uppercase italic bg-[#183d5dd4] text-white dark:bg-[#569ad5d4] dark:text-slate-900 border border-[#569ad5d4] shadow-sm"
+                    >
+                      Change Role
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -136,6 +182,50 @@ export default function UserDetail() {
             </div>
           )}
         </div>
+
+        {/* Popup Modal para cambiar el rol */}
+        {showRoleModal && (
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+            <div className="w-full bg-white dark:bg-[#0b1b2b] border-2 border-[#569ad5d4] p-4 shadow-2xl rounded-none space-y-3">
+              <h3 className="text-xs font-black uppercase italic text-slate-900 dark:text-white">
+                Change Resident Role
+              </h3>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold uppercase italic text-slate-600 dark:text-slate-300 block">
+                  Select New Role
+                </label>
+                <select
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value)}
+                  className="w-full p-2 text-xs italic border border-[#569ad5d4] bg-slate-50 dark:bg-[#183d5dd4] text-slate-900 dark:text-white focus:outline-none"
+                >
+                  <option value="L_NIG">Owner (L_NIG)</option>
+                  <option value="L_SNIG">Leader (L_SNIG)</option>
+                  <option value="L_T">Tower Leader (L_T)</option>
+                  <option value="RESIDENT">Neighbor / Resident</option>
+                </select>
+              </div>
+
+              <div className="flex space-x-2 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRoleModal(false)}
+                  className="px-3 py-1 text-[10px] uppercase font-bold italic border border-slate-400 text-slate-600 dark:text-slate-300 rounded-none"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRoleUpdate}
+                  className="px-3 py-1 text-[10px] uppercase font-black italic bg-[#183d5dd4] text-white dark:bg-[#569ad5d4] dark:text-slate-900 rounded-none shadow-md"
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </Template>
