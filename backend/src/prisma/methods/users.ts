@@ -114,11 +114,11 @@ export async function loginUser(phoneNumber: string, password: string) {
 // 4. CREATE USER (Multi-account prevention & ban check)
 // ------------------------------------------------------
 export async function createUser(input: any, creatorUser?: { role: string }) {
-  // Verificamos si es el primer usuario del sistema (Bootstrap)
-  const existingUsersCount = await listUsers();
-  const isBootstrap = existingUsersCount.length <= 0;
+  // Bootstrap: si no existe ningún usuario, el primero es L_NIG y nace ACTIVE
+  const firstUser = await db.orm.public.User.select("id").first();
+  const isBootstrap = !firstUser;
 
-  // Validación de permisos para roles especiales (se omite si es el bootstrap inicial)
+  // Validación de permisos para roles especiales (se omite en el bootstrap inicial)
   if (!isBootstrap && input.role && input.role !== "I_T" && creatorUser?.role !== "L_NIG") {
     throw new Error("FORBIDDEN_ROLE_ASSIGNMENT");
   }
@@ -138,8 +138,8 @@ export async function createUser(input: any, creatorUser?: { role: string }) {
     password: input.password,
     phoneNumber: input.phoneNumber,
     email: input.email ?? null,
-    role: input.role ?? "I_T",
-    // Si es bootstrap, nace ACTIVE automáticamente; de lo contrario, PENDING
+    // El primer usuario siempre es L_NIG; después se respeta el rol pedido
+    role: isBootstrap ? "L_NIG" : (input.role ?? "I_T"),
     status: isBootstrap || creatorUser?.role === "L_NIG" ? "ACTIVE" : "PENDING",
     apartmentId: input.apartmentId ?? null,
     apartmentGuide: input.apartmentGuide,
