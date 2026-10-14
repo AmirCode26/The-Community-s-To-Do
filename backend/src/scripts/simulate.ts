@@ -1,6 +1,6 @@
 import { db } from "../prisma/db.ts";
 
-const BASE_URL = "http://localhost:3000/api";
+const BASE_URL = "https://the-community-s-to-do.seenode.app/api";
 
 // Optimized helper for HTTP requests with simulated auth headers
 async function apiRequest(
@@ -18,12 +18,12 @@ async function apiRequest(
     headers["x-user-role"] = userHeaders.role;
     headers["x-user-status"] = userHeaders.status || "ACTIVE";
   }
-
   const response = await fetch(`${BASE_URL}${endpoint}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
+  console.log(response);
 
   const data = await response.json();
   if (!response.ok) {

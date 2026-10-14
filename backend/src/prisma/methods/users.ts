@@ -195,7 +195,24 @@ export async function updateUserStatus(
   }).update({ status: newStatus });
   return updatedUser;
 }
+// ------------------------------------------------------
+// UPDATE USER ROLE (Solo L_NIG)
+// ------------------------------------------------------
+export async function updateUserRole(
+  targetUserId: string,
+  newRole: "L_NIG" | "L_SNIG" | "L_T" | "I_T",
+  requesterUser: { role: string },
+) {
+  if (requesterUser.role !== "L_NIG") {
+    throw new Error("Access denied: Only Global Admin (L_NIG) can update roles.");
+  }
 
+  const updatedUser = await db.orm.public.User.where({
+    id: targetUserId,
+  }).update({ role: newRole });
+
+  return updatedUser;
+}
 // ------------------------------------------------------
 // 7. DELETE USER
 // ------------------------------------------------------
