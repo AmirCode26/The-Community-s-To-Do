@@ -22,7 +22,7 @@
     "migration:show": "prisma migration show",
     "migration:status": "prisma migration status",
     "skills:sync": "prisma skills sync || exit 0",
-    "start": "node dist/index.mjs",
+    "start": "node dist/server.mjs",
     "postinstall": "prisma skills sync || exit 0"
   },
   "dependencies": {
