@@ -45,7 +45,18 @@ export async function createUser(req: Request, res: Response, next: NextFunction
         next(error);
     }
 }
+export async function updateUserRole(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.user) throw new Error("No autenticado");
+    const { id } = req.params;
+    const { role } = req.body;
 
+    const updated = await UserService.updateUserRole(id, role, req.user);
+    res.json(updated);
+  } catch (error) {
+    next(error);
+  }
+}
 export async function updateUserStatus(req: Request, res: Response, next: NextFunction) {
     try {
         if (!req.user) throw new Error("No autenticado");

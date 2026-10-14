@@ -19,6 +19,7 @@ export interface UpdateUserInput {
   nickname?: string;
   email?: string | null;
   privateProfile?: boolean;
+  role?: string;
 }
 
 // ------------------------------------------------------
@@ -160,6 +161,7 @@ export async function updateUser(
     id: targetUserId,
   }).update({
     ...(input.fullName && { fullName: input.fullName }),
+    ...(input.nickname && { nickname: input.nickname }),
             ...(input.nickname && { nickname: input.nickname }),
             ...(input.email !== undefined && { email: input.email }),
             ...(input.privateProfile !== undefined && {
