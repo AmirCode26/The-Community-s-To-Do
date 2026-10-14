@@ -15,6 +15,7 @@ interface Post {
     fullName: string;
     nickname?: string;
     role?: string;
+    status?: string;
   };
 }
 
@@ -60,23 +61,6 @@ export default function BoardDetail() {
   };
 
   useEffect(() => {
-    const loadBoardData = async () => {
-      try {
-        const boardData = await api_tctd(`/boards/${boardId}`, 'GET');
-        setBoard(boardData);
-
-        const postsData = await api_tctd(`/posts/board/${boardId}`, 'GET');
-        setPosts(postsData);
-      } catch (err: unknown) {
-        if (err instanceof Error) {
-          setErrorMsg(err.message);
-        } else {
-          setErrorMsg('Could not load board content.');
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
     if (boardId) {
       loadBoardData();
     }
@@ -160,15 +144,17 @@ export default function BoardDetail() {
     }
   };
 
-  const handleBanAuthor = async (authorId: string) => {
+  // Función general para cambiar el estado del autor (BANNED, ACTIVE, etc.) exigida por PostItem
+  const handleStatusChange = async (authorId: string, status: string) => {
     try {
-      await api_tctd(`/users/${authorId}/status`, 'PATCH', { status: 'BANNED' });
-      alert('Author successfully banned.');
+      await api_tctd(`/users/${authorId}/status`, 'PATCH', { status });
+      alert(`Author status successfully updated to ${status}.`);
+      loadBoardData();
     } catch (err: unknown) {
       if (err instanceof Error) {
         setErrorMsg(err.message);
       } else {
-        setErrorMsg('Failed to ban user.');
+        setErrorMsg('Failed to update user status.');
       }
     }
   };
@@ -219,7 +205,7 @@ export default function BoardDetail() {
                 onDelete={handleDeletePost}
                 onUpdate={handleUpdatePost}
                 onReport={(p) => setReportPostTarget(p)}
-                onBan={handleBanAuthor}
+                onStatusChange={handleStatusChange}
               />
             ))
           )}
